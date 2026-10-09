@@ -3,7 +3,8 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { app } from "../src/app";
 import { db, pool } from "../src/db";
-import { auditLogs } from "../src/db/schema";
+import { auditLogs, tasks } from "../src/db/schema";
+import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { join } from "node:path";
 
@@ -104,5 +105,65 @@ describe("GET /api/tasks/:id/audit-logs", () => {
 
   it("returns 404 for a malformed id", async () => {
     expect((await logsOf("not-a-uuid")).status).toBe(404);
+  });
+});
+
+describe("DELETE /api/tasks/:id", () => {
+  type Log = { actor: string; action: string; fromStatus: string | null; toStatus: string };
+  const del = (id: string, body: unknown = { actor: "jane.smith" }) =>
+    fetch(`${base}/api/tasks/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const newTask = async () =>
+    ((await (await post("/api/tasks", { title: "Doomed", actor: "john.doe" })).json()) as { id: string }).id;
+  const listIds = async () => ((await (await fetch(base + "/api/tasks")).json()) as { id: string }[]).map((t) => t.id);
+
+  it("hides the Task from the list but keeps its Audit Log with a Deletion Entry", async () => {
+    const id = await newTask();
+    // Status endpoint is a separate ticket, so the current Status is set directly.
+    await db.update(tasks).set({ status: "pending" }).where(eq(tasks.id, id));
+
+    expect((await del(id)).status).toBe(204);
+    expect(await listIds()).not.toContain(id);
+
+    const logsRes = await fetch(`${base}/api/tasks/${id}/audit-logs`);
+    expect(logsRes.status).toBe(200);
+    const logs = (await logsRes.json()) as Log[];
+    expect(logs).toHaveLength(2);
+    expect(logs[0]).toMatchObject({ action: "create" });
+    expect(logs[1]).toMatchObject({ actor: "jane.smith", action: "delete", fromStatus: null, toStatus: "pending" });
+  });
+
+  it("returns 404 on a second delete and adds no second Deletion Entry", async () => {
+    const id = await newTask();
+    expect((await del(id)).status).toBe(204);
+    expect((await del(id)).status).toBe(404);
+    const logs = (await (await fetch(`${base}/api/tasks/${id}/audit-logs`)).json()) as Log[];
+    expect(logs.filter((l) => l.action === "delete")).toHaveLength(1);
+  });
+
+  it("returns 404 when changing Status of a deleted Task", async () => {
+    const id = await newTask();
+    await del(id);
+    const res = await fetch(`${base}/api/tasks/${id}/status`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "pending", actor: "john.doe" }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for an unknown or malformed id", async () => {
+    expect((await del(crypto.randomUUID())).status).toBe(404);
+    expect((await del("not-a-uuid")).status).toBe(404);
+  });
+
+  it("rejects an unknown or missing Actor with 400 and keeps the Task", async () => {
+    const id = await newTask();
+    expect((await del(id, { actor: "nobody.here" })).status).toBe(400);
+    expect((await del(id, {})).status).toBe(400);
+    expect(await listIds()).toContain(id);
   });
 });

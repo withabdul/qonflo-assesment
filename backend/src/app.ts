@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
-import { asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import * as z from "zod";
 import { db } from "./db";
 import { auditLogs, tasks } from "./db/schema";
@@ -8,6 +8,10 @@ export const ACTORS = ["john.doe", "jane.smith", "budi.santoso"] as const;
 
 const CreateTask = z.object({
   title: z.string().trim().min(1, "Title must not be empty"),
+  actor: z.enum(ACTORS, { error: "Unknown actor" }),
+});
+
+const DeleteTask = z.object({
   actor: z.enum(ACTORS, { error: "Unknown actor" }),
 });
 
@@ -43,6 +47,39 @@ app.post("/api/tasks", async (req, res) => {
     return created!;
   });
   res.status(201).json(task);
+});
+
+app.delete("/api/tasks/:id", async (req, res) => {
+  const parsed = DeleteTask.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]!.message });
+    return;
+  }
+  const id = z.uuid().safeParse(req.params.id);
+  // The deletedAt guard makes a concurrent second delete a 404; Task and Deletion Entry commit together.
+  const deleted = id.success
+    ? await db.transaction(async (tx) => {
+        const [task] = await tx
+          .update(tasks)
+          .set({ deletedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(tasks.id, id.data), isNull(tasks.deletedAt)))
+          .returning();
+        if (!task) return false;
+        await tx.insert(auditLogs).values({
+          taskId: task.id,
+          actor: parsed.data.actor,
+          action: "delete",
+          fromStatus: null,
+          toStatus: task.status,
+        });
+        return true;
+      })
+    : false;
+  if (!deleted) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  res.status(204).end();
 });
 
 app.get("/api/tasks/:id/audit-logs", async (req, res) => {

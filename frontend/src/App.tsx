@@ -54,6 +54,20 @@ export default function App() {
     }
   }
 
+  async function remove(id: string) {
+    setError('')
+    try {
+      await api(`/api/tasks/${id}`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actor }),
+      })
+      await loadTasks()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
   return (
     <main className="mx-auto max-w-2xl p-6 space-y-6">
       <header className="flex items-center justify-between">
@@ -91,6 +105,9 @@ export default function App() {
           <li key={t.id} className="flex flex-wrap items-center justify-between border rounded px-3 py-2">
             <span>{t.title}</span>
             <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE[t.status]}`}>{t.status}</span>
+            <button type="button" className="text-sm text-red-700 underline" onClick={() => remove(t.id)}>
+              Delete
+            </button>
             <AuditLog taskId={t.id} refresh={t.status} />
           </li>
         ))}
