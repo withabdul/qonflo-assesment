@@ -1,0 +1,15 @@
+# Postgres lokal untuk development. Nilai di bawah hanya contoh lokal, cocok dengan .env.example.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mini_task_manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

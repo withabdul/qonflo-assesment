@@ -4,7 +4,6 @@ import type { Server } from "node:http";
 import { app } from "../src/app";
 import { db, pool } from "../src/db";
 import { auditLogs } from "../src/db/schema";
-import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { join } from "node:path";
 
@@ -88,7 +87,7 @@ describe("GET /api/tasks/:id/audit-logs", () => {
   it("returns entries oldest first, ties broken by id", async () => {
     const created = await post("/api/tasks", { title: "Ordered", actor: "john.doe" });
     const task = (await created.json()) as { id: string };
-    // Seeded directly: the status endpoint is a separate ticket; both rows share createdAt so only id orders them.
+    // Seeded directly so both rows share createdAt; only id can order them.
     const at = new Date("2030-01-01T00:00:00Z");
     await db.insert(auditLogs).values([
       { taskId: task.id, actor: "budi.santoso", action: "status_change", fromStatus: "to_do", toStatus: "pending", createdAt: at },
@@ -120,8 +119,14 @@ const newTask = async () => {
   return ((await res.json()) as { id: string }).id;
 };
 
-// No audit-log read endpoint exists yet, so logs are read straight from the table.
-const logsOf = (taskId: string) => db.select().from(auditLogs).where(eq(auditLogs.taskId, taskId));
+// Reads logs through GET /api/tasks/:id/audit-logs (404 never happens here: every Task has a Creation Entry).
+const logsOf = async (taskId: string) =>
+  (await (await fetch(`${base}/api/tasks/${taskId}/audit-logs`)).json()) as {
+    action: string;
+    actor: string;
+    fromStatus: string | null;
+    toStatus: string;
+  }[];
 
 const statusOf = async (id: string) => {
   const list = (await (await fetch(base + "/api/tasks")).json()) as { id: string; status: string }[];
