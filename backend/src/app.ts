@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
-import { asc, isNull } from "drizzle-orm";
+import { asc, eq, isNull } from "drizzle-orm";
 import * as z from "zod";
 import { db } from "./db";
 import { auditLogs, tasks } from "./db/schema";
@@ -43,6 +43,19 @@ app.post("/api/tasks", async (req, res) => {
     return created!;
   });
   res.status(201).json(task);
+});
+
+app.get("/api/tasks/:id/audit-logs", async (req, res) => {
+  const id = z.uuid().safeParse(req.params.id);
+  // Every Task has a Creation Entry, so no rows means unknown; deleted Tasks keep their rows.
+  const logs = id.success
+    ? await db.select().from(auditLogs).where(eq(auditLogs.taskId, id.data)).orderBy(asc(auditLogs.createdAt), asc(auditLogs.id))
+    : [];
+  if (logs.length === 0) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+  res.json(logs);
 });
 
 app.use((err: { status?: number; message: string }, _req: Request, res: Response, _next: NextFunction) => {
