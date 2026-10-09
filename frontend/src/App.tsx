@@ -11,6 +11,12 @@ const STATUS_STYLE: Record<Status, string> = {
   done: 'bg-green-100 text-green-800',
 }
 
+const NEXT_STATUS: Partial<Record<Status, Status>> = {
+  to_do: 'pending',
+  pending: 'in_progress',
+  in_progress: 'done',
+}
+
 // Backend errors are shown as-is so the Actor sees why an action was rejected.
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
@@ -48,6 +54,20 @@ export default function App() {
         body: JSON.stringify({ title, actor }),
       })
       setTitle('')
+      await loadTasks()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  async function advance(id: string, status: Status) {
+    setError('')
+    try {
+      await api(`/api/tasks/${id}/status`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status, actor }),
+      })
       await loadTasks()
     } catch (err) {
       setError((err as Error).message)
@@ -104,10 +124,20 @@ export default function App() {
         {tasks.map((t) => (
           <li key={t.id} className="flex flex-wrap items-center justify-between border rounded px-3 py-2">
             <span>{t.title}</span>
-            <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE[t.status]}`}>{t.status}</span>
-            <button type="button" className="text-sm text-red-700 underline" onClick={() => remove(t.id)}>
-              Delete
-            </button>
+            <span className="flex items-center gap-2">
+              <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE[t.status]}`}>{t.status}</span>
+              {NEXT_STATUS[t.status] && (
+                <button
+                  className="rounded border px-2 py-0.5 text-xs"
+                  onClick={() => advance(t.id, NEXT_STATUS[t.status]!)}
+                >
+                  Advance to {NEXT_STATUS[t.status]}
+                </button>
+              )}
+              <button type="button" className="text-sm text-red-700 underline" onClick={() => remove(t.id)}>
+                Delete
+              </button>
+            </span>
             <AuditLog taskId={t.id} refresh={t.status} />
           </li>
         ))}
