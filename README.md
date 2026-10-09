@@ -54,7 +54,9 @@ Nilai ini sama dengan `.env.example` dan `docker-compose.yml` (hanya untuk lokal
 | `bun run build` | `frontend` | Typecheck dan build frontend |
 | `bun run lint` | `frontend` | oxlint |
 
-Test menjalankan migrasi sendiri dan menulis Task nyata ke database. Gunakan database atau branch Neon khusus test, bukan database yang dipakai untuk demo.
+> **Peringatan: jangan jalankan `bun run test` ke database demo.**
+> Test menjalankan migrasi sendiri dan menulis Task serta Audit Log nyata lewat API. Task tersebut muncul di daftar aplikasi, dan jumlahnya bertambah setiap test dijalankan. Audit Log dari test **tidak dapat dibersihkan** karena trigger menolak UPDATE, DELETE, dan TRUNCATE (itu tujuan fiturnya). Satu-satunya cara membersihkan adalah mengosongkan schema atau membuat ulang database.
+> Gunakan database atau branch Neon khusus test, dan isi `DATABASE_URL` test hanya saat menjalankan test.
 
 ## API
 
@@ -94,6 +96,7 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 - **Judul Task tidak dapat diubah** setelah dibuat (di luar lingkup).
 - Task yang dihapus tidak dapat dipulihkan.
 - Tidak ada pembaruan real-time antar pengguna; UI baru menyegarkan daftar setelah aksi dari klien itu sendiri.
+- **Database pengembangan berisi data hasil test.** Test integrasi sudah dijalankan ke database yang sama dengan demo, sehingga ada Task bertitle acak (mis. `T <uuid>`, `Logged`, `Ordered`) beserta Audit Log-nya. Audit Log itu tidak dapat dihapus oleh desain. Test tidak punya pengaman terhadap hal ini; membuat `TEST_DATABASE_URL` terpisah masuk daftar perbaikan lanjutan.
 
 ## Jawaban pertanyaan wajib
 
@@ -116,7 +119,7 @@ Batasnya: trigger dapat dilepas oleh pemilik tabel atau superuser (`DROP TRIGGER
 
 Yang pertama: **menambah autentikasi dan mengambil Actor dari identitas sesi, bukan dari body request.** Alasannya: seluruh nilai Audit Log bergantung pada kebenaran kolom `actor`, dan saat ini kolom itu hanya input klien. Risiko lain (lock, pertumbuhan tabel) hanya memengaruhi performa, sedangkan Actor yang dapat dipalsukan membuat data audit tidak dapat dipercaya.
 
-Berikutnya, berurutan: paginasi dan index `audit_logs(task_id, id)` serta `tasks(deleted_at)`; role database tanpa hak UPDATE/DELETE; memecah `app.ts` menjadi route dan lapisan data agar dapat diuji terpisah.
+Berikutnya, berurutan: `TEST_DATABASE_URL` terpisah dengan penolakan menjalankan test ke database lain; paginasi dan index `audit_logs(task_id, id)` serta `tasks(deleted_at)`; role database tanpa hak UPDATE/DELETE; memecah `app.ts` menjadi route dan lapisan data agar dapat diuji terpisah.
 
 ## Penggunaan AI
 
