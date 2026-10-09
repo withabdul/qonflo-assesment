@@ -1,12 +1,16 @@
 import { afterAll, beforeAll, expect, it } from "bun:test";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { join } from "node:path";
-import { db, pool } from "../src/db";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+
+// Own pool: bun test shares modules across files, so ending the app pool here would break other files.
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const taskId = crypto.randomUUID();
 
 beforeAll(async () => {
-  await migrate(db, { migrationsFolder: join(import.meta.dir, "../drizzle") });
+  await migrate(drizzle({ client: pool }), { migrationsFolder: join(import.meta.dir, "../drizzle") });
   await pool.query(
     "INSERT INTO audit_logs (task_id, actor, action, to_status) VALUES ($1, 'john.doe', 'create', 'to_do')",
     [taskId],

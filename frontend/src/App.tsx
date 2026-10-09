@@ -71,6 +71,8 @@ export default function App() {
       await loadTasks()
     } catch (err) {
       setError((err as Error).message)
+      // A rejected change usually means the list is stale; refresh without masking the error.
+      await loadTasks().catch(() => {})
     }
   }
 
@@ -85,6 +87,7 @@ export default function App() {
       await loadTasks()
     } catch (err) {
       setError((err as Error).message)
+      await loadTasks().catch(() => {})
     }
   }
 

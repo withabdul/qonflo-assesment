@@ -75,7 +75,7 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 
 - **Backend** (`backend/src/app.ts`): satu file Express. Daftar Actor tetap ada di kode (`ACTORS`). Body divalidasi dengan zod.
 - **Konsistensi**: ubah Status dan insert Audit Log berjalan dalam satu transaksi. `PUT status` memakai `SELECT ... FOR UPDATE` pada baris Task, jadi request bersamaan pada Task yang sama diserialkan dan request kedua melihat Status terbaru. Create dan delete juga satu transaksi dengan log-nya.
-- **Database** (`backend/src/db/schema.ts`): tabel `tasks` (UUID, `deleted_at` nullable) dan `audit_logs` (id serial agar urutan pasti saat timestamp sama; tanpa foreign key supaya log tetap ada setelah Task dihapus). Kolom `action` membedakan `create`, `status_change`, dan `delete`.
+- **Database** (`backend/src/db/schema.ts`): tabel `tasks` (UUID, `deleted_at` nullable) dan `audit_logs` (id serial menjadi urutan kronologis yang pasti (timestamp transaksi bisa lebih awal dari urutan commit); tanpa foreign key supaya log tetap ada setelah Task dihapus). Kolom `action` membedakan `create`, `status_change`, dan `delete`.
 - **Frontend** (`frontend/src`): satu halaman tanpa router dan tanpa state library. Dropdown Actor global, form create, daftar Task dengan badge Status, tombol maju satu langkah, tombol hapus, panel Audit Log per Task. Error dari backend ditampilkan apa adanya.
 
 ## Asumsi dan trade-off
@@ -116,7 +116,7 @@ Batasnya: trigger dapat dilepas oleh pemilik tabel atau superuser (`DROP TRIGGER
 
 Yang pertama: **menambah autentikasi dan mengambil Actor dari identitas sesi, bukan dari body request.** Alasannya: seluruh nilai Audit Log bergantung pada kebenaran kolom `actor`, dan saat ini kolom itu hanya input klien. Risiko lain (lock, pertumbuhan tabel) hanya memengaruhi performa, sedangkan Actor yang dapat dipalsukan membuat data audit tidak dapat dipercaya.
 
-Berikutnya, berurutan: paginasi dan index `audit_logs(task_id, created_at, id)` serta `tasks(deleted_at)`; role database tanpa hak UPDATE/DELETE; memecah `app.ts` menjadi route dan lapisan data agar dapat diuji terpisah.
+Berikutnya, berurutan: paginasi dan index `audit_logs(task_id, id)` serta `tasks(deleted_at)`; role database tanpa hak UPDATE/DELETE; memecah `app.ts` menjadi route dan lapisan data agar dapat diuji terpisah.
 
 ## Penggunaan AI
 

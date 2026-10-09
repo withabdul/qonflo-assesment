@@ -37,7 +37,7 @@ export default function AuditLog({ taskId, refresh }: { taskId: string; refresh:
   return (
     <div className="basis-full text-sm">
       <button type="button" className="underline" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? 'Hide history' : 'Show history'}
+        {open ? 'Hide Audit Log' : 'Show Audit Log'}
       </button>
       {open && (
         <ol className="mt-2 list-decimal pl-5 space-y-1">
