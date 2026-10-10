@@ -99,7 +99,7 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 - Task yang dihapus tidak dapat dipulihkan.
 - **Frontend tidak memiliki test otomatis**; test yang ada mencakup backend lewat HTTP API.
 - Tidak ada pembaruan real-time antar pengguna; UI baru menyegarkan daftar setelah aksi dari klien itu sendiri.
-- **Test tidak punya pengaman terhadap database yang salah.** Test menulis Task dan Audit Log nyata ke database mana pun yang ada di `DATABASE_URL`, dan Audit Log itu tidak dapat dihapus oleh desain. Database pengembangan pernah terkena ini dan dibersihkan dengan drop tabel lalu migrasi ulang (DROP TABLE tidak diblokir trigger). `TEST_DATABASE_URL` terpisah masuk daftar perbaikan lanjutan.
+- **Test tidak punya pengaman terhadap database yang salah.** Test menulis Task dan Audit Log nyata ke database mana pun yang ada di `DATABASE_URL`, dan Audit Log itu tidak dapat dihapus oleh desain. Membersihkannya hanya mungkin dengan drop tabel lalu migrasi ulang (DROP TABLE tidak diblokir trigger). `TEST_DATABASE_URL` terpisah masuk daftar perbaikan lanjutan.
 
 ## Jawaban pertanyaan wajib
 
@@ -148,7 +148,7 @@ Saya memakai AI (Claude Code) di seluruh proses, bukan hanya untuk menulis kode,
 
 ### Cara validasi
 
-- **Test integrasi dijalankan** ke Postgres nyata (Neon) setelah ticket 01 sampai 05 digabung: 25 test lulus, mencakup transisi, idempotent update, soft delete, 5 request bersamaan menghasilkan satu log, dan UPDATE/DELETE/TRUNCATE langsung ke `audit_logs` ditolak database.
+- **Test integrasi dijalankan** ke Postgres nyata (Neon): 26 test lulus (0 gagal), mencakup transisi, idempotent update, soft delete, 5 request bersamaan menghasilkan satu log, daftar Audit Log semua Task, dan UPDATE/DELETE/TRUNCATE langsung ke `audit_logs` ditolak database. Test dijalankan lagi setelah tab Audit Log dan refactor backend.
 - **Test menemukan bug di test itu sendiri:** `audit-immutability.test.ts` menutup pool bersama sehingga test lain gagal. Diperbaiki dengan pool sendiri.
 - **Review menemukan bug urutan log:** sebelumnya diurutkan `createdAt` lalu `id`, padahal `createdAt` adalah waktu awal transaksi. Sekarang diurutkan `id`.
 - **Output AI tidak diterima mentah:** ctx7 mendokumentasikan Drizzle v1 RC, jadi versi dikunci ke stable 0.45; klaim "test lulus" ditahan sampai benar-benar dijalankan; konflik merge antar ticket diselesaikan dan diverifikasi ulang dengan typecheck, build, dan test.
