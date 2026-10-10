@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from "express";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, isNull } from "drizzle-orm";
 import * as z from "zod";
 import { db } from "./db";
 import { auditLogs, tasks } from "./db/schema";
@@ -80,6 +80,16 @@ app.delete("/api/tasks/:id", async (req, res) => {
     return;
   }
   res.status(204).end();
+});
+
+app.get("/api/audit-logs", async (_req, res) => {
+  // Inner join is safe: Tasks are soft-deleted, so every log row still has its Task row.
+  const rows = await db
+    .select({ ...getTableColumns(auditLogs), taskTitle: tasks.title })
+    .from(auditLogs)
+    .innerJoin(tasks, eq(tasks.id, auditLogs.taskId))
+    .orderBy(asc(auditLogs.id));
+  res.json(rows);
 });
 
 app.get("/api/tasks/:id/audit-logs", async (req, res) => {

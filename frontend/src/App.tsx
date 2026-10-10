@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { api } from './api'
 import AuditLog from './AuditLog'
 
 type Status = 'to_do' | 'pending' | 'in_progress' | 'done'
@@ -17,15 +18,9 @@ const NEXT_STATUS: Partial<Record<Status, Status>> = {
   in_progress: 'done',
 }
 
-// Backend errors are shown as-is so the Actor sees why an action was rejected.
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init)
-  const body = await res.json().catch(() => null)
-  if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`)
-  return body as T
-}
-
 export default function App() {
+  const [tab, setTab] = useState<'tasks' | 'audit'>('tasks')
+  const [auditTaskId, setAuditTaskId] = useState('')
   const [actors, setActors] = useState<string[]>([])
   const [actor, setActor] = useState('')
   const [tasks, setTasks] = useState<Task[]>([])
@@ -109,6 +104,31 @@ export default function App() {
         </label>
       </header>
 
+      <nav className="flex gap-2 border-b" aria-label="Tabs">
+        {(
+          [
+            ['tasks', 'Tasks'],
+            ['audit', 'Audit Log'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-current={tab === key ? 'page' : undefined}
+            className={`px-3 py-2 text-sm ${tab === key ? 'border-b-2 border-black font-semibold' : 'text-gray-600'}`}
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {error && <p role="alert" className="rounded bg-red-100 text-red-800 px-3 py-2">{error}</p>}
+
+      {tab === 'audit' && <AuditLog taskId={auditTaskId} onFilter={setAuditTaskId} />}
+
+      {tab === 'tasks' && (
+      <>
       <form onSubmit={create} className="flex gap-2">
         <input
           className="flex-1 border rounded px-3 py-2"
@@ -120,8 +140,6 @@ export default function App() {
           Create
         </button>
       </form>
-
-      {error && <p role="alert" className="rounded bg-red-100 text-red-800 px-3 py-2">{error}</p>}
 
       <ul className="space-y-2">
         {tasks.map((t) => (
@@ -141,10 +159,21 @@ export default function App() {
                 Delete
               </button>
             </span>
-            <AuditLog taskId={t.id} refresh={t.status} />
+            <button
+              type="button"
+              className="basis-full text-left text-sm underline"
+              onClick={() => {
+                setAuditTaskId(t.id)
+                setTab('audit')
+              }}
+            >
+              Lihat Audit Log
+            </button>
           </li>
         ))}
       </ul>
+      </>
+      )}
     </main>
   )
 }

@@ -69,7 +69,8 @@ Semua route memakai prefix `/api`.
 | POST | `/api/tasks` | Body `{ title, actor }`. 201, Task `to_do` + Creation Entry |
 | PUT | `/api/tasks/:id/status` | Body `{ status, actor }`. Hanya satu langkah maju |
 | DELETE | `/api/tasks/:id` | Body `{ actor }`. 204, soft delete + Deletion Entry |
-| GET | `/api/tasks/:id/audit-logs` | Audit Log urut dari yang terlama. Tetap 200 untuk Task yang sudah dihapus |
+| GET | `/api/audit-logs` | Semua Audit Log dengan `taskTitle`, urut dari yang terlama, termasuk milik Task yang sudah dihapus. Dipakai tab Audit Log |
+| GET | `/api/tasks/:id/audit-logs` | Audit Log satu Task, urut dari yang terlama. Tetap 200 untuk Task yang sudah dihapus |
 
 Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal (loncat, mundur, keluar dari `done`) 409; Task tidak ada atau sudah dihapus 404; Status sama dengan Status sekarang 200 tanpa Audit Log baru (Idempotent Update).
 
@@ -78,7 +79,7 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 - **Backend** (`backend/src/app.ts`): satu file Express. Daftar Actor tetap ada di kode (`ACTORS`). Body divalidasi dengan zod.
 - **Konsistensi**: ubah Status dan insert Audit Log berjalan dalam satu transaksi. `PUT status` memakai `SELECT ... FOR UPDATE` pada baris Task, jadi request bersamaan pada Task yang sama diserialkan dan request kedua melihat Status terbaru. Create dan delete juga satu transaksi dengan log-nya.
 - **Database** (`backend/src/db/schema.ts`): tabel `tasks` (UUID, `deleted_at` nullable) dan `audit_logs` (id serial menjadi urutan kronologis yang pasti (timestamp transaksi bisa lebih awal dari urutan commit); tanpa foreign key supaya log tetap ada setelah Task dihapus). Kolom `action` membedakan `create`, `status_change`, dan `delete`.
-- **Frontend** (`frontend/src`): satu halaman tanpa router dan tanpa state library. Dropdown Actor global, form create, daftar Task dengan badge Status, tombol maju satu langkah, tombol hapus, panel Audit Log per Task. Error dari backend ditampilkan apa adanya.
+- **Frontend** (`frontend/src`): satu halaman dengan dua tab, tanpa router dan tanpa state library. Dropdown Actor global; tab Tasks berisi form create, daftar Task dengan badge Status, tombol maju satu langkah, tombol hapus, dan tautan ke Audit Log Task itu; tab Audit Log menampilkan semua log kronologis dengan filter per Task, termasuk Task yang sudah dihapus. Error dari backend ditampilkan apa adanya.
 
 ## Asumsi dan trade-off
 
@@ -92,7 +93,8 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 
 ## Keterbatasan yang diketahui
 
-- **Task yang dihapus hilang dari UI**, jadi Deletion Entry-nya hanya dapat dibaca lewat API (`GET /api/tasks/:id/audit-logs`). UI tidak punya tampilan untuk Task yang sudah dihapus.
+- **Task yang dihapus hilang dari tab Tasks.** Riwayat dan Deletion Entry-nya tetap terlihat di tab Audit Log, tetapi tidak ada tampilan untuk memulihkan atau melihat daftar Task terhapus sebagai entitas sendiri.
+- **Tab Audit Log memuat ulang saat dibuka**, bukan real-time, dan filter Task dilakukan di klien.
 - **Judul Task tidak dapat diubah** setelah dibuat (di luar lingkup).
 - Task yang dihapus tidak dapat dipulihkan.
 - Tidak ada pembaruan real-time antar pengguna; UI baru menyegarkan daftar setelah aksi dari klien itu sendiri.

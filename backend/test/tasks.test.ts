@@ -257,3 +257,24 @@ describe("DELETE /api/tasks/:id", () => {
     expect(await listIds()).toContain(id);
   });
 });
+describe("GET /api/audit-logs", () => {
+  it("lists logs of every Task with its title, including a deleted Task, oldest first", async () => {
+    const title = `All ${crypto.randomUUID()}`;
+    const created = await post("/api/tasks", { title, actor: "john.doe" });
+    const { id } = (await created.json()) as { id: string };
+    await fetch(`${base}/api/tasks/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ actor: "jane.smith" }),
+    });
+
+    const res = await fetch(base + "/api/audit-logs");
+    expect(res.status).toBe(200);
+    const all = (await res.json()) as { id: number; taskId: string; taskTitle: string; action: string }[];
+    const mine = all.filter((l) => l.taskId === id);
+    expect(mine.map((l) => l.action)).toEqual(["create", "delete"]);
+    expect(mine.every((l) => l.taskTitle === title)).toBe(true);
+    const ids = all.map((l) => l.id);
+    expect(ids).toEqual([...ids].sort((a, b) => a - b));
+  });
+});
