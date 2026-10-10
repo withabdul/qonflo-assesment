@@ -123,9 +123,11 @@ Yang pertama: **menambah autentikasi dan mengambil Actor dari identitas sesi, bu
 
 Berikutnya, berurutan: `TEST_DATABASE_URL` terpisah dengan penolakan menjalankan test ke database lain; paginasi dan index `audit_logs(task_id, id)` serta `tasks(deleted_at)`; role database tanpa hak UPDATE/DELETE; memisahkan akses data dari use case (repository) bila ada lebih dari satu sumber data, dan menambah test unit untuk `domain.ts`.
 
+**Race condition dan lock.** Perubahan Status sudah memakai lock tingkat baris (`SELECT ... FOR UPDATE`) di dalam transaksi, sehingga dua request bersamaan pada Task yang sama diserialkan dan tidak menghasilkan Audit Log ganda atau Status yang melompat. Delete memakai `UPDATE ... WHERE deleted_at IS NULL` yang atomik. Jika beban bertambah, langkah berikutnya adalah mengatur `lock_timeout` agar request yang antre gagal cepat dan bukan menahan koneksi pool, serta menambah pengecekan versi (optimistic concurrency) supaya klien dengan tampilan basi mendapat konflik yang jelas. Lock ini ada di database, jadi tetap berlaku bila backend dijalankan lebih dari satu instance.
+
 ## Penggunaan AI
 
-Saya memakai AI (Claude Code) di seluruh proses, bukan hanya untuk menulis kode, supaya pengerjaan lebih cepat. Peran saya adalah memastikan alur kerja dan arsitektur (clean code) berjalan mulus, dan memutuskan hal-hal yang harus dipilih manusia.
+Saya memakai AI (Claude Code) di seluruh proses, bukan hanya untuk menulis kode, juga agar pengerjaan lebih cepat. Peran saya adalah memastikan alur kerja dan arsitektur (clean code) berjalan mulus, dan memutuskan hal-hal yang harus dipilih manusia.
 
 ### Bagian yang dibantu AI
 
@@ -133,12 +135,12 @@ Saya memakai AI (Claude Code) di seluruh proses, bukan hanya untuk menulis kode,
 - **Spec dan ticket:** spec dipecah menjadi 6 ticket vertikal dengan relasi blocker.
 - **Implementasi:** tiap ticket dikerjakan subagent AI di worktree sendiri, test-first, lalu di-merge ke satu branch integrasi.
 - **Code review:** dua sumbu, Standards (terhadap `GLOSSARY.md` dan smell baseline) dan Spec (terhadap acceptance criteria).
-- **Dokumentasi library:** dirujuk lewat ctx7, bukan dari ingatan model.
+- **Dokumentasi library:** dirujuk lewat ctx7 (CLI untuk mendapatkan dokumentasi terbaru), bukan dari ingatan model.
 - **README ini:** draf awalnya ditulis AI, lalu dikoreksi.
 
 ### Peran dan keputusan saya
 
-- Menetapkan stack dan batasan: Bun, PostgreSQL di Neon dengan Drizzle dan driver `pg` (bukan postgres.js), Tailwind, satu halaman tanpa router.
+- Menetapkan stack dan batasan: Bun, PostgreSQL di Neon dengan Drizzle dan driver `pg`, Tailwind, satu halaman tanpa router.
 - Menetapkan model domain: Actor wajib di semua mutasi, pembuatan Task ikut tercatat sebagai Audit Log, soft delete supaya Audit Log tidak pernah hilang, dan proteksi immutability di database (trigger), bukan hanya di kode aplikasi.
 - Menjaga alur dan arsitektur: satu seam test (HTTP API), kode yang sederhana tanpa abstraksi berlebih, dan istilah yang konsisten dengan `GLOSSARY.md`.
 - Menyetujui spec dan breakdown ticket sebelum implementasi, serta memutuskan tindakan berisiko (menjalankan test dan migrasi ke database, membersihkan data test).
