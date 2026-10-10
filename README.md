@@ -1,6 +1,6 @@
 # Mini Task Manager
 
-Aplikasi satu halaman untuk mengelola Task dengan Audit Log yang tidak dapat diubah. Setiap perubahan Status tercatat: siapa (Actor), kapan, dan dari Status apa ke Status apa. Istilah mengikuti [GLOSSARY.md](GLOSSARY.md).
+Aplikasi satu halaman (dua tab: Tasks dan Audit Log) untuk mengelola Task dengan Audit Log yang tidak dapat diubah. Setiap perubahan Status tercatat: siapa (Actor), kapan, dan dari Status apa ke Status apa. Istilah mengikuti [GLOSSARY.md](GLOSSARY.md).
 
 Stack: Bun workspaces, backend Express + Drizzle ORM + `pg` + zod di atas Bun, database PostgreSQL, frontend React + Vite + Tailwind.
 
@@ -64,7 +64,7 @@ Semua route memakai prefix `/api`.
 
 | Method | Path | Keterangan |
 | --- | --- | --- |
-| GET | `/api/users` | Daftar Actor tetap |
+| GET | `/api/users` | Daftar Actor tetap. Nama path `users` mengikuti contoh brief; di domain istilahnya Actor |
 | GET | `/api/tasks` | Task yang belum dihapus |
 | POST | `/api/tasks` | Body `{ title, actor }`. 201, Task `to_do` + Creation Entry |
 | PUT | `/api/tasks/:id/status` | Body `{ status, actor }`. Hanya satu langkah maju |
@@ -76,10 +76,10 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 
 ## Arsitektur singkat
 
-- **Backend** (`backend/src`): tiga lapisan kecil. `domain.ts` berisi aturan murni (daftar Actor, urutan Status, fungsi `transition`, error domain) tanpa HTTP dan tanpa database. `tasks.ts` berisi use case; tiap penulisan mengubah Task dan Audit Log dalam satu transaksi. `app.ts` hanya batas HTTP: validasi body dengan zod, memanggil use case, dan memetakan error domain ke kode status (400, 404, 409). Urutan Status didefinisikan sekali di `domain.ts` dan dipakai juga oleh skema database.
+- **Backend** (`backend/src`): tiga lapisan kecil. `domain.ts` berisi aturan murni (daftar Actor, urutan Status, fungsi `transition`, error domain) tanpa HTTP dan tanpa database. `tasks.ts` berisi use case; tiap penulisan mengubah Task dan Audit Log dalam satu transaksi. `app.ts` hanya batas HTTP: validasi body dengan zod, memanggil use case, dan memetakan error domain ke kode status (400, 404, 409). Di backend urutan Status didefinisikan sekali di `domain.ts` dan dipakai juga oleh skema database.
 - **Konsistensi**: ubah Status dan insert Audit Log berjalan dalam satu transaksi. `PUT status` memakai `SELECT ... FOR UPDATE` pada baris Task, jadi request bersamaan pada Task yang sama diserialkan dan request kedua melihat Status terbaru. Create dan delete juga satu transaksi dengan log-nya.
 - **Database** (`backend/src/db/schema.ts`): tabel `tasks` (UUID, `deleted_at` nullable) dan `audit_logs` (id serial menjadi urutan kronologis yang pasti (timestamp transaksi bisa lebih awal dari urutan commit); tanpa foreign key supaya log tetap ada setelah Task dihapus). Kolom `action` membedakan `create`, `status_change`, dan `delete`.
-- **Frontend** (`frontend/src`): satu halaman dengan dua tab, tanpa router dan tanpa state library. Dropdown Actor global; tab Tasks berisi form create, daftar Task dengan badge Status, tombol maju satu langkah, tombol hapus, dan tautan ke Audit Log Task itu; tab Audit Log menampilkan semua log kronologis dengan filter per Task, termasuk Task yang sudah dihapus. Error dari backend ditampilkan apa adanya.
+- **Frontend** (`frontend/src`): satu halaman dengan dua tab, tanpa router dan tanpa state library. Dropdown Actor global; tab Tasks berisi form create, daftar Task dengan badge Status, tombol maju satu langkah, tombol hapus, dan tautan ke Audit Log Task itu; tab Audit Log menampilkan semua log kronologis dengan filter per Task, termasuk Task yang sudah dihapus. Error dari backend ditampilkan apa adanya. Frontend memegang salinan urutan Status sendiri (`status.ts` dan `NEXT_STATUS` di `App.tsx`) hanya untuk tampilan; backend tetap penentu transisi yang sah.
 
 ## Asumsi dan trade-off
 
@@ -114,7 +114,7 @@ Batasnya: trigger dapat dilepas oleh pemilik tabel atau superuser (`DROP TRIGGER
 ### 2. Bagian mana yang paling berisiko jika pengguna banyak?
 
 - **Row lock pada Task yang ramai.** Setiap perubahan Status mengunci baris Task (`FOR UPDATE`) selama transaksi. Banyak request pada Task yang sama akan antre dan menahan koneksi dari pool.
-- **`audit_logs` tumbuh tanpa batas dan tanpa paginasi.** `GET /api/tasks/:id/audit-logs` dan `GET /api/tasks` mengembalikan semua baris. Tidak ada index selain primary key, jadi query per `task_id` akan melambat saat tabel membesar.
+- **`audit_logs` tumbuh tanpa batas dan tanpa paginasi.** `GET /api/audit-logs` (dipakai tab Audit Log) mengembalikan seluruh log semua Task, sedangkan `GET /api/tasks/:id/audit-logs` dan `GET /api/tasks` mengembalikan semua baris yang cocok. Tidak ada index selain primary key, jadi query per `task_id` akan melambat saat tabel membesar.
 - **Tidak ada autentikasi**, sehingga Actor dapat dipalsukan. Dengan banyak pengguna, Audit Log paling mudah disalahgunakan.
 
 ### 3. Apa yang di-refactor lebih dulu jika sistem membesar, dan mengapa?
@@ -145,14 +145,15 @@ Saya memakai AI (Claude Code) di seluruh proses, bukan hanya untuk menulis kode,
 
 ### Cara validasi
 
-- **Test integrasi dijalankan** ke Postgres nyata (Neon): 25 test lulus, mencakup transisi, idempotent update, soft delete, 5 request bersamaan menghasilkan satu log, dan UPDATE/DELETE/TRUNCATE langsung ke `audit_logs` ditolak database.
+- **Test integrasi dijalankan** ke Postgres nyata (Neon): 25 test lulus, mencakup transisi, idempotent update, soft delete, 5 request bersamaan menghasilkan satu log, dan UPDATE/DELETE/TRUNCATE langsung ke `audit_logs` ditolak database. Saat ini ada 26 test; satu test baru untuk `GET /api/audit-logs` ditulis setelah run itu dan belum dijalankan.
 - **Test menemukan bug di test itu sendiri:** `audit-immutability.test.ts` menutup pool bersama sehingga test lain gagal. Diperbaiki dengan pool sendiri.
 - **Review menemukan bug urutan log:** sebelumnya diurutkan `createdAt` lalu `id`, padahal `createdAt` adalah waktu awal transaksi. Sekarang diurutkan `id`.
 - **Output AI tidak diterima mentah:** ctx7 mendokumentasikan Drizzle v1 RC, jadi versi dikunci ke stable 0.45; klaim "test lulus" ditahan sampai benar-benar dijalankan; konflik merge antar ticket diselesaikan dan diverifikasi ulang dengan typecheck, build, dan test.
-- Typecheck dan build (`tsc`, `vite build`) lolos.
+- Typecheck dan build (`tsc`, `vite build`) lolos, termasuk setelah refactor backend (pemisahan `domain.ts`, `tasks.ts`, `app.ts`) dan perapihan duplikasi frontend.
 
 ### Yang belum terverifikasi
 
+- **Refactor backend dan perubahan UI terbaru belum diuji dengan test.** Test terakhir dijalankan sebelum tab Audit Log dan sebelum pemisahan `domain.ts` / `tasks.ts` / `app.ts`. Perilaku API seharusnya sama, tetapi itu belum dibuktikan dengan menjalankan 26 test ke database khusus test.
 - **UI belum pernah dijalankan di browser.** Perilaku frontend hanya diverifikasi lewat typecheck dan build, bukan secara manual.
 - **Frontend tidak punya test otomatis** (di luar lingkup spec).
 - Test integrasi menulis data permanen ke database (lihat peringatan di atas), jadi hasil test di atas berasal dari database pengembangan yang kemudian dibersihkan.
