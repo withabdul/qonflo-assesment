@@ -5,3 +5,6 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`)
   return body as T
 }
+
+export const send = (method: 'POST' | 'PUT' | 'DELETE', path: string, body: unknown) =>
+  api(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })

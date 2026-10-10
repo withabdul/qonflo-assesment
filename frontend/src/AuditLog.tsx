@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from './api'
+import { EmptyState, ErrorAlert } from './Notice'
 import { type Status } from './status'
 import { StatusBadge } from './StatusBadge'
 
@@ -84,16 +85,8 @@ export default function AuditLog({ taskId, onFilter }: { taskId: string; onFilte
       </div>
 
       {!loaded && <p className="text-sm text-slate-500">Loading Audit Log…</p>}
-      {loaded && !error && shown.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
-          No Audit Log entries yet.
-        </div>
-      )}
-      {error && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
-        </p>
-      )}
+      {loaded && !error && shown.length === 0 && <EmptyState>No Audit Log entries yet.</EmptyState>}
+      {error && <ErrorAlert message={error} />}
 
       <ol className="relative space-y-4 border-l-2 border-slate-200 pl-6">
         {shown.map((e) => (

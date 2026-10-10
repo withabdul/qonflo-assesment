@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { api } from './api'
+import { api, send } from './api'
 import AuditLog from './AuditLog'
+import { EmptyState, ErrorAlert } from './Notice'
 import { STATUS_META, type Status } from './status'
 import { StatusBadge, StatusProgress } from './StatusBadge'
 
@@ -11,8 +12,6 @@ const NEXT_STATUS: Partial<Record<Status, Status>> = {
   pending: 'in_progress',
   in_progress: 'done',
 }
-
-const json = { 'content-type': 'application/json' }
 
 export default function App() {
   const [tab, setTab] = useState<'tasks' | 'audit'>('tasks')
@@ -38,40 +37,30 @@ export default function App() {
       .finally(() => setLoaded(true))
   }, [])
 
-  async function create(e: FormEvent) {
+  // Runs one user action. A rejected change usually means the list is stale, so refresh without masking the error.
+  async function act(request: () => Promise<unknown>, onDone?: () => void) {
+    setError('')
+    try {
+      await request()
+      onDone?.()
+      await loadTasks()
+    } catch (err) {
+      setError((err as Error).message)
+      await loadTasks().catch(() => {})
+    }
+  }
+
+  const create = (e: FormEvent) => {
     e.preventDefault()
-    setError('')
-    try {
-      await api('/api/tasks', { method: 'POST', headers: json, body: JSON.stringify({ title, actor }) })
-      setTitle('')
-      await loadTasks()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    return act(() => send('POST', '/api/tasks', { title, actor }), () => setTitle(''))
   }
 
-  async function advance(id: string, status: Status) {
-    setError('')
-    try {
-      await api(`/api/tasks/${id}/status`, { method: 'PUT', headers: json, body: JSON.stringify({ status, actor }) })
-      await loadTasks()
-    } catch (err) {
-      setError((err as Error).message)
-      // A rejected change usually means the list is stale; refresh without masking the error.
-      await loadTasks().catch(() => {})
-    }
-  }
+  const advance = (id: string, status: Status) =>
+    act(() => send('PUT', `/api/tasks/${id}/status`, { status, actor }))
 
-  async function remove(id: string) {
-    setError('')
+  const remove = (id: string) => {
     setConfirmId('')
-    try {
-      await api(`/api/tasks/${id}`, { method: 'DELETE', headers: json, body: JSON.stringify({ actor }) })
-      await loadTasks()
-    } catch (err) {
-      setError((err as Error).message)
-      await loadTasks().catch(() => {})
-    }
+    return act(() => send('DELETE', `/api/tasks/${id}`, { actor }))
   }
 
   return (
@@ -119,11 +108,7 @@ export default function App() {
           ))}
         </nav>
 
-        {error && (
-          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {error}
-          </p>
-        )}
+        {error && <ErrorAlert message={error} />}
 
         {tab === 'audit' && <AuditLog taskId={auditTaskId} onFilter={setAuditTaskId} />}
 
@@ -145,11 +130,7 @@ export default function App() {
             </form>
 
             {!loaded && <p className="text-sm text-slate-500">Loading tasks…</p>}
-            {loaded && tasks.length === 0 && (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
-                No tasks yet. Add the first one above.
-              </div>
-            )}
+            {loaded && tasks.length === 0 && <EmptyState>No tasks yet. Add the first one above.</EmptyState>}
 
             <ul className="space-y-3">
               {tasks.map((t) => {
