@@ -96,7 +96,7 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 - **Judul Task tidak dapat diubah** setelah dibuat (di luar lingkup).
 - Task yang dihapus tidak dapat dipulihkan.
 - Tidak ada pembaruan real-time antar pengguna; UI baru menyegarkan daftar setelah aksi dari klien itu sendiri.
-- **Database pengembangan berisi data hasil test.** Test integrasi sudah dijalankan ke database yang sama dengan demo, sehingga ada Task bertitle acak (mis. `T <uuid>`, `Logged`, `Ordered`) beserta Audit Log-nya. Audit Log itu tidak dapat dihapus oleh desain. Test tidak punya pengaman terhadap hal ini; membuat `TEST_DATABASE_URL` terpisah masuk daftar perbaikan lanjutan.
+- **Test tidak punya pengaman terhadap database yang salah.** Test menulis Task dan Audit Log nyata ke database mana pun yang ada di `DATABASE_URL`, dan Audit Log itu tidak dapat dihapus oleh desain. Database pengembangan pernah terkena ini dan dibersihkan dengan drop tabel lalu migrasi ulang (DROP TABLE tidak diblokir trigger). `TEST_DATABASE_URL` terpisah masuk daftar perbaikan lanjutan.
 
 ## Jawaban pertanyaan wajib
 
