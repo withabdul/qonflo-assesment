@@ -123,16 +123,34 @@ Berikutnya, berurutan: `TEST_DATABASE_URL` terpisah dengan penolakan menjalankan
 
 ## Penggunaan AI
 
-Sebagian besar kode, test, dan dokumen ini ditulis oleh AI (Claude Code) lewat subagent, dengan alur spec dan ticket: spec ditulis dan disetujui lebih dulu, dipecah menjadi ticket 01 sampai 06, lalu tiap ticket dikerjakan dan di-merge ke satu branch integrasi.
+Saya memakai AI (Claude Code) di seluruh proses, bukan hanya untuk menulis kode, supaya pengerjaan lebih cepat. Peran saya adalah memastikan alur kerja dan arsitektur (clean code) berjalan mulus, dan memutuskan hal-hal yang harus dipilih manusia.
 
-Cara validasi, apa adanya:
+### Bagian yang dibantu AI
 
-- Test integrasi (`backend/test/tasks.test.ts` dan `backend/test/audit-immutability.test.ts`) ditulis lebih dulu daripada implementasi (test-first) pada seam HTTP API dengan Postgres nyata.
-- Review kode terhadap spec per ticket.
-- Typecheck dan build (`tsc`, `vite build`).
-- Dokumentasi library (Drizzle, Express, Vite, Tailwind) dirujuk lewat ctx7 saat implementasi.
+- **Menggali kebutuhan:** AI mewawancarai saya per pertanyaan (struktur repo, persistence, aturan transisi, penghapusan, dll.) sebelum ada kode, lalu menuliskannya ke `GLOSSARY.md` dan spec.
+- **Spec dan ticket:** spec dipecah menjadi 6 ticket vertikal dengan relasi blocker.
+- **Implementasi:** tiap ticket dikerjakan subagent AI di worktree sendiri, test-first, lalu di-merge ke satu branch integrasi.
+- **Code review:** dua sumbu, Standards (terhadap `GLOSSARY.md` dan smell baseline) dan Spec (terhadap acceptance criteria).
+- **Dokumentasi library:** dirujuk lewat ctx7, bukan dari ingatan model.
+- **README ini:** draf awalnya ditulis AI, lalu dikoreksi.
 
-**Yang belum dilakukan saat README ini ditulis:** test integrasi belum pernah dijalankan terhadap database, karena `DATABASE_URL` belum tersedia. Jadi pernyataan "test lulus" belum dapat dibuat. Perilaku trigger dan konkurensi baru diverifikasi lewat review kode, bukan eksekusi.
+### Peran dan keputusan saya
 
-> **Pemilik: perbarui bagian ini setelah menjalankan `bun run test` di `backend`.**
-> Status eksekusi test: BELUM DIJALANKAN (isi hasil, tanggal, dan database yang dipakai).
+- Menetapkan stack dan batasan: Bun, PostgreSQL di Neon dengan Drizzle dan driver `pg` (bukan postgres.js), Tailwind, satu halaman tanpa router.
+- Menetapkan model domain: Actor wajib di semua mutasi, pembuatan Task ikut tercatat sebagai Audit Log, soft delete supaya Audit Log tidak pernah hilang, dan proteksi immutability di database (trigger), bukan hanya di kode aplikasi.
+- Menjaga alur dan arsitektur: satu seam test (HTTP API), kode yang sederhana tanpa abstraksi berlebih, dan istilah yang konsisten dengan `GLOSSARY.md`.
+- Menyetujui spec dan breakdown ticket sebelum implementasi, serta memutuskan tindakan berisiko (menjalankan test dan migrasi ke database, membersihkan data test).
+
+### Cara validasi
+
+- **Test integrasi dijalankan** ke Postgres nyata (Neon): 25 test lulus, mencakup transisi, idempotent update, soft delete, 5 request bersamaan menghasilkan satu log, dan UPDATE/DELETE/TRUNCATE langsung ke `audit_logs` ditolak database.
+- **Test menemukan bug di test itu sendiri:** `audit-immutability.test.ts` menutup pool bersama sehingga test lain gagal. Diperbaiki dengan pool sendiri.
+- **Review menemukan bug urutan log:** sebelumnya diurutkan `createdAt` lalu `id`, padahal `createdAt` adalah waktu awal transaksi. Sekarang diurutkan `id`.
+- **Output AI tidak diterima mentah:** ctx7 mendokumentasikan Drizzle v1 RC, jadi versi dikunci ke stable 0.45; klaim "test lulus" ditahan sampai benar-benar dijalankan; konflik merge antar ticket diselesaikan dan diverifikasi ulang dengan typecheck, build, dan test.
+- Typecheck dan build (`tsc`, `vite build`) lolos.
+
+### Yang belum terverifikasi
+
+- **UI belum pernah dijalankan di browser.** Perilaku frontend hanya diverifikasi lewat typecheck dan build, bukan secara manual.
+- **Frontend tidak punya test otomatis** (di luar lingkup spec).
+- Test integrasi menulis data permanen ke database (lihat peringatan di atas), jadi hasil test di atas berasal dari database pengembangan yang kemudian dibersihkan.
