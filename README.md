@@ -76,7 +76,7 @@ Kode respons: input tidak valid atau Actor tidak dikenal 400; Transition ilegal 
 
 ## Arsitektur singkat
 
-- **Backend** (`backend/src/app.ts`): satu file Express. Daftar Actor tetap ada di kode (`ACTORS`). Body divalidasi dengan zod.
+- **Backend** (`backend/src`): tiga lapisan kecil. `domain.ts` berisi aturan murni (daftar Actor, urutan Status, fungsi `transition`, error domain) tanpa HTTP dan tanpa database. `tasks.ts` berisi use case; tiap penulisan mengubah Task dan Audit Log dalam satu transaksi. `app.ts` hanya batas HTTP: validasi body dengan zod, memanggil use case, dan memetakan error domain ke kode status (400, 404, 409). Urutan Status didefinisikan sekali di `domain.ts` dan dipakai juga oleh skema database.
 - **Konsistensi**: ubah Status dan insert Audit Log berjalan dalam satu transaksi. `PUT status` memakai `SELECT ... FOR UPDATE` pada baris Task, jadi request bersamaan pada Task yang sama diserialkan dan request kedua melihat Status terbaru. Create dan delete juga satu transaksi dengan log-nya.
 - **Database** (`backend/src/db/schema.ts`): tabel `tasks` (UUID, `deleted_at` nullable) dan `audit_logs` (id serial menjadi urutan kronologis yang pasti (timestamp transaksi bisa lebih awal dari urutan commit); tanpa foreign key supaya log tetap ada setelah Task dihapus). Kolom `action` membedakan `create`, `status_change`, dan `delete`.
 - **Frontend** (`frontend/src`): satu halaman dengan dua tab, tanpa router dan tanpa state library. Dropdown Actor global; tab Tasks berisi form create, daftar Task dengan badge Status, tombol maju satu langkah, tombol hapus, dan tautan ke Audit Log Task itu; tab Audit Log menampilkan semua log kronologis dengan filter per Task, termasuk Task yang sudah dihapus. Error dari backend ditampilkan apa adanya.
@@ -121,7 +121,7 @@ Batasnya: trigger dapat dilepas oleh pemilik tabel atau superuser (`DROP TRIGGER
 
 Yang pertama: **menambah autentikasi dan mengambil Actor dari identitas sesi, bukan dari body request.** Alasannya: seluruh nilai Audit Log bergantung pada kebenaran kolom `actor`, dan saat ini kolom itu hanya input klien. Risiko lain (lock, pertumbuhan tabel) hanya memengaruhi performa, sedangkan Actor yang dapat dipalsukan membuat data audit tidak dapat dipercaya.
 
-Berikutnya, berurutan: `TEST_DATABASE_URL` terpisah dengan penolakan menjalankan test ke database lain; paginasi dan index `audit_logs(task_id, id)` serta `tasks(deleted_at)`; role database tanpa hak UPDATE/DELETE; memecah `app.ts` menjadi route dan lapisan data agar dapat diuji terpisah.
+Berikutnya, berurutan: `TEST_DATABASE_URL` terpisah dengan penolakan menjalankan test ke database lain; paginasi dan index `audit_logs(task_id, id)` serta `tasks(deleted_at)`; role database tanpa hak UPDATE/DELETE; memisahkan akses data dari use case (repository) bila ada lebih dari satu sumber data, dan menambah test unit untuk `domain.ts`.
 
 ## Penggunaan AI
 

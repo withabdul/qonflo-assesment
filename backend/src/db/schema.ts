@@ -1,6 +1,7 @@
 import { pgEnum, pgTable, serial, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { STATUS_FLOW } from "../domain";
 
-export const taskStatus = pgEnum("task_status", ["to_do", "pending", "in_progress", "done"]);
+export const taskStatus = pgEnum("task_status", STATUS_FLOW);
 
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
